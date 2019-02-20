@@ -20,7 +20,11 @@
 
 typedef struct AQPState {
     PortioList portio_list;
-    uint8_t byte7;
+    uint32_t iobase;
+    uint8_t byte07;
+    uint8_t byte10;
+    uint8_t byte11;
+    uint8_t byte14;
 } AQPState;
 
 typedef struct ISAAQPState {
@@ -51,9 +55,24 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
 {
     AQPState *s = opaque;
     uint32_t ret = 0xff;
-
-    (void)s;
-    pdebug("r%02x %02x\n", address, ret);
+    const uint32_t port = address - s->iobase;
+    switch (port) {
+    case 0x07:
+        ret = s->byte07;
+        break;
+    case 0x10:
+        ret = s->byte10;
+        break;
+    case 0x11:
+        ret = s->byte11;
+        break;
+    case 0x14:
+        ret = s->byte14;
+        break;
+    default:
+        break;
+    }
+    pdebug("r%02x %02x\n", port, ret);
     return ret;
 }
 
@@ -61,8 +80,24 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
 static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
 {
     AQPState *s = opaque;
-    (void)s;
-    pdebug("w%02x %02x\n", address, value);
+    const uint32_t port = address - s->iobase;
+    switch (port) {
+    case 0x07:
+        s->byte07 = value;
+        break;
+    case 0x10:
+        s->byte10 = value;
+        break;
+    case 0x11:
+        s->byte11 = value;
+        break;
+    case 0x14:
+        s->byte14 = value;
+        break;
+    default:
+        break;
+    }
+    pdebug("w%02x %02x\n", port, value);
 }
 
 
@@ -83,6 +118,7 @@ static void aqp_isa_realizefn(DeviceState *dev, Error **errp)
     uint32_t base;
 
     base = isa->iobase;
+    s->iobase = base;
     qemu_register_reset(aqp_reset, s);
     isa_register_portio_list(isadev, &s->portio_list, base, &aqp_isa_portio_list[0], s, "aqp");
 }
@@ -93,7 +129,10 @@ static const VMStateDescription vmstate_aqp_isa = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(state.byte7, ISAAQPState),
+        VMSTATE_UINT8(state.byte07, ISAAQPState),
+        VMSTATE_UINT8(state.byte10, ISAAQPState),
+        VMSTATE_UINT8(state.byte11, ISAAQPState),
+        VMSTATE_UINT8(state.byte14, ISAAQPState),
         VMSTATE_END_OF_LIST()
     }
 };
