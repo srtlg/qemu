@@ -185,7 +185,7 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         break;
     case 0x10:
         if (s->state == HWD_S7) { s->state = HWD_S8; s->byte10 = 1; }
-        ret = s->byte10;
+        ret = s->byte10 | 0x01; // no error
         break;
     case 0x11:
         ret = s->byte11;
