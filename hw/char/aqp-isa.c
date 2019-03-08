@@ -18,28 +18,6 @@
 #define pdebug(fmt, ...) ((void)0)
 #endif
 
-enum aqp_state {
-    State_Reset,
-    // DetectHardWare
-    HWD_S0,
-    HWD_S1,
-    HWD_S2,
-    HWD_S3,
-    HWD_S4,
-    HWD_S5,
-    HWD_S6,
-    HWD_S7,
-    HWD_S8,
-    HWD_S9,
-    HWD_S10,
-    // DetectFastLink
-    HWD_S11,
-    HWD_S12,
-    HWD_S13,
-    //
-    State_Error
-};
-
 enum aqp_poke_state {
     PP_RD00,
     PP_WRITE_OPCODE,
@@ -85,7 +63,6 @@ enum aqp_poke_state {
 typedef struct AQPState {
     PortioList portio_list;
     uint32_t iobase;
-    enum aqp_state state;
     enum aqp_poke_state pp_state;
     uint8_t pp_opcode;
     uint32_t pp_address;
@@ -129,7 +106,6 @@ static Property aqp_isa_properties[] = {
 static void aqp_reset(void *opaque)
 {
     AQPState *s = opaque;
-    s->state = State_Reset;
     s->pp_state = PP_RD00;
 }
 
@@ -139,6 +115,7 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
     AQPState *s = opaque;
     uint32_t ret = 0xff;
     const uint32_t port = address - s->iobase;
+    const enum aqp_poke_state oldppstate = s->pp_state;
 #define next_pp_state(_previous, _next, _expr) \
     do { \
         assert(_previous != _next); \
@@ -153,14 +130,12 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_PEEK_RDV1, PP_PEEK_RD24, ret = 0xff & (s->pp_value >> 8));
         next_pp_state(PP_PEEK_RDV2, PP_PEEK_RD25, ret = 0xff & (s->pp_value >> 16));
         next_pp_state(PP_PEEK_RDV3, PP_RD00,      ret = 0xff & (s->pp_value >> 24));
-        if (s->state == HWD_S8 && s->pp_state == PP_RD00) { s->state = HWD_S9; }
         break;
     case 0x02:
         next_pp_state(PP_PEEK_RD21, PP_PEEK_RDV0, (void)0);
         next_pp_state(PP_PEEK_RD23, PP_PEEK_RDV1, (void)0);
         next_pp_state(PP_PEEK_RD24, PP_PEEK_RDV2, (void)0);
         next_pp_state(PP_PEEK_RD25, PP_PEEK_RDV3, (void)0);
-        if (s->state == HWD_S11) { s->state = HWD_S12; }
         break;
     case 0x03:
         next_pp_state(PP_RD00, PP_WRITE_OPCODE, (void)0);
@@ -184,7 +159,6 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         ret = s->byte07;
         break;
     case 0x10:
-        if (s->state == HWD_S7) { s->state = HWD_S8; s->byte10 = 1; }
         ret = s->byte10 | 0x01; // no error
         break;
     case 0x11:
@@ -197,28 +171,15 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         pdebug("UNHANDLED PORT %02x\n", port);
         break;
     }
-    pdebug("r%02x %02x\n", port, ret);
+    pdebug("r%02x %02x      (%d->%d)\n", port, ret, oldppstate, s->pp_state);
     return ret;
 }
 
 
 static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
 {
-#define next_state(_previous, _next, _value) \
-    do { \
-        assert(_previous != _next); \
-        if (s->state == _previous) { \
-            if (value == _value) { nextstate = _next; } \
-            else { \
-                s->state = State_Error; \
-                pdebug("error state %i -> %i when value %i expected %i\n", _previous, _next, value, _value); \
-            } \
-        } \
-    } while (0)
     AQPState *s = opaque;
     const uint32_t port = address - s->iobase;
-    const enum aqp_state oldstate = s->state;
-    enum aqp_state nextstate = s->state;
     const enum aqp_poke_state oldppstate = s->pp_state;
     switch (port) {
     case 0x01:
@@ -253,35 +214,23 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
 
         if (oldppstate == PP_POKE_WTV3 && s->pp_state == PP_RD00) { pdebug("POKE(%x, %x)\n", s->pp_address, s->pp_value); }
         if (oldppstate == PP_PEEK_WTAD3 && s->pp_state == PP_PEEK_RD21) { pdebug("PEEK(%x) => %x\n", s->pp_address, s->pp_value); }
-        if (s->state == HWD_S6 && oldppstate == PP_POKE_WTV3 && s->pp_state == PP_RD00) { nextstate = HWD_S7; s->pp_value = 0x1234567; }
         break;
     case 0x07:
-        next_state(HWD_S1, HWD_S2, 8);
-        next_state(HWD_S2, HWD_S3, 0);
-        next_state(HWD_S10, HWD_S11, 1);
-        next_state(HWD_S12, HWD_S13, 0);
         s->byte07 = value;
         break;
     case 0x10:
-        next_state(HWD_S0, HWD_S1, 0);
-        next_state(HWD_S4, HWD_S5, 1);
-        next_state(HWD_S5, HWD_S6, 0);
         s->byte10 = value;
         break;
     case 0x11:
-        next_state(State_Reset, HWD_S0, 0);
         s->byte11 = value;
         break;
     case 0x14:
-        next_state(HWD_S3, HWD_S4, 0x80);
-        next_state(HWD_S9, HWD_S10, 0);
         s->byte14 = value;
         break;
     default:
         break;
     }
-    s->state = nextstate;
-    pdebug("w%02x %02x      (%d->%d | %d->%d)\n", port, value, oldstate, s->state, oldppstate, s->pp_state);
+    pdebug("w%02x %02x      (%d->%d)\n", port, value, oldppstate, s->pp_state);
 }
 
 
