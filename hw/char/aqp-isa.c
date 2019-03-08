@@ -60,13 +60,16 @@ enum aqp_poke_state {
     PP_Error
 };
 
+#define PP_MEMORY_BASE 0x80000000
+#define PP_MEMORY_SIZE 0x00200000
+
 typedef struct AQPState {
     PortioList portio_list;
     uint32_t iobase;
     enum aqp_poke_state pp_state;
-    uint8_t pp_opcode;
     uint32_t pp_address;
     uint32_t pp_value;
+    uint32_t seg8_memory[PP_MEMORY_SIZE / sizeof(uint32_t)];
     uint8_t byte07;
     uint8_t byte10;
     uint8_t byte11;
@@ -212,8 +215,20 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
         next_pp_state(PP_PEEK_WTAD2, PP_PEEK_RD15, s->pp_address |= ((0xff & value) << 16));
         next_pp_state(PP_PEEK_WTAD3, PP_PEEK_RD21, s->pp_address |= ((0xff & value) << 24));
 
-        if (oldppstate == PP_POKE_WTV3 && s->pp_state == PP_RD00) { pdebug("POKE(%x, %x)\n", s->pp_address, s->pp_value); }
-        if (oldppstate == PP_PEEK_WTAD3 && s->pp_state == PP_PEEK_RD21) { pdebug("PEEK(%x) => %x\n", s->pp_address, s->pp_value); }
+        if (oldppstate == PP_POKE_WTV3 && s->pp_state == PP_RD00) {
+            pdebug("POKE(%x, %x)\n", s->pp_address, s->pp_value);
+            if (s->pp_address >= PP_MEMORY_BASE && s->pp_address < PP_MEMORY_BASE + PP_MEMORY_SIZE) {
+                s->seg8_memory[(s->pp_address - PP_MEMORY_BASE) / sizeof(s->seg8_memory[0])] = s->pp_value;
+            }
+        }
+        if (oldppstate == PP_PEEK_WTAD3 && s->pp_state == PP_PEEK_RD21) {
+            if (s->pp_address >= PP_MEMORY_BASE && s->pp_address < PP_MEMORY_BASE + PP_MEMORY_SIZE) {
+                s->pp_value = s->seg8_memory[(s->pp_address - PP_MEMORY_BASE) / sizeof(s->seg8_memory[0])];
+            } else {
+                s->pp_value = 0x55aa55aa;
+            }
+            pdebug("PEEK(%x) => %x\n", s->pp_address, s->pp_value);
+        }
         break;
     case 0x07:
         s->byte07 = value;
