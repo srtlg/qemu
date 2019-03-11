@@ -254,6 +254,7 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
         s->byte14 = value;
         break;
     default:
+        pdebug("UNHANDLED PORT %02x\n", port);
         break;
     }
 #ifdef DEBUG_AQP
