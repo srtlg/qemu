@@ -2,6 +2,7 @@
  * Bruker ISA AQP Card emulation
  */
 #include "qemu/osdep.h"
+#include "qemu/timer.h"
 #include "qapi/error.h"
 #include "hw/hw.h"
 #include "chardev/char-parallel.h"
@@ -13,7 +14,11 @@
 #define DEBUG_AQP
 
 #ifdef DEBUG_AQP
-#define pdebug(fmt, ...) printf("aqp: " fmt, ## __VA_ARGS__)
+#define pdebug(fmt, ...) \
+    do { \
+        int64_t time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL); \
+        printf("%016" PRIx64 " aqp: " fmt, time, ## __VA_ARGS__); \
+    } while (0)
 #else
 #define pdebug(fmt, ...) ((void)0)
 #endif
