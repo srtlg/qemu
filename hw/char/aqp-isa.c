@@ -179,7 +179,13 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         pdebug("UNHANDLED PORT %02x\n", port);
         break;
     }
-    pdebug("r%02x %02x      (%d->%d)\n", port, ret, oldppstate, s->pp_state);
+#ifdef DEBUG_AQP
+    if (oldppstate != s->pp_state) {
+        pdebug("w%02x %02x      (%d->%d)\n", port, ret, oldppstate, s->pp_state);
+    } else {
+        pdebug("w%02x %02x\n", port, ret);
+    }
+#endif
     return ret;
 }
 
@@ -250,7 +256,13 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
     default:
         break;
     }
-    pdebug("w%02x %02x      (%d->%d)\n", port, value, oldppstate, s->pp_state);
+#ifdef DEBUG_AQP
+    if (oldppstate != s->pp_state) {
+        pdebug("w%02x %02x      (%d->%d)\n", port, value, oldppstate, s->pp_state);
+    } else {
+        pdebug("w%02x %02x\n", port, value);
+    }
+#endif
 }
 
 
