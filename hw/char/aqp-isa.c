@@ -181,9 +181,9 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
     }
 #ifdef DEBUG_AQP
     if (oldppstate != s->pp_state) {
-        pdebug("w%02x %02x      (%d->%d)\n", port, ret, oldppstate, s->pp_state);
+        pdebug("r%02x %02x      (%d->%d)\n", port, ret, oldppstate, s->pp_state);
     } else {
-        pdebug("w%02x %02x\n", port, ret);
+        pdebug("r%02x %02x\n", port, ret);
     }
 #endif
     return ret;
