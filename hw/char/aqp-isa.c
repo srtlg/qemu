@@ -320,24 +320,11 @@ static void aqp_isa_realizefn(DeviceState *dev, Error **errp)
 }
 
 
-static const VMStateDescription vmstate_aqp_isa = {
-    .name = "aqp_isa",
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT8(state.byte07, ISAAQPState),
-        VMSTATE_UINT8(state.byte10, ISAAQPState),
-        VMSTATE_UINT8(state.byte11, ISAAQPState),
-        VMSTATE_UINT8(state.byte14, ISAAQPState),
-        VMSTATE_END_OF_LIST()
-    }
-};
-
 static void aqp_isa_class_initfn(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     dc->realize = aqp_isa_realizefn;
-    dc->vmsd = &vmstate_aqp_isa;
+    dc->vmsd = NULL;
     dc->props = aqp_isa_properties;
     set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
 }
