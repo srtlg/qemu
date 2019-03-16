@@ -72,6 +72,10 @@ enum aqp_poke_state {
     PP_PEEK_RD25,
     PP_PEEK_RDV3,
 
+    PP_LINK_RD01 = 300,
+    PP_LINK_VRD,
+    PP_LINK_RD,
+
     PP_Error
 };
 
@@ -150,12 +154,18 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_PEEK_RDV1, PP_PEEK_RD24, ret = 0xff & (s->pp_value >> 8));
         next_pp_state(PP_PEEK_RDV2, PP_PEEK_RD25, ret = 0xff & (s->pp_value >> 16));
         next_pp_state(PP_PEEK_RDV3, PP_IDLE,      ret = 0xff & (s->pp_value >> 24));
+
+        next_pp_state(PP_LINK_VRD, PP_LINK_RD, (void)0);
         break;
     case 0x02:
         next_pp_state(PP_PEEK_RD21, PP_PEEK_RDV0, (void)0);
         next_pp_state(PP_PEEK_RD23, PP_PEEK_RDV1, (void)0);
         next_pp_state(PP_PEEK_RD24, PP_PEEK_RDV2, (void)0);
         next_pp_state(PP_PEEK_RD25, PP_PEEK_RDV3, (void)0);
+
+        next_pp_state(PP_BRANCH2, PP_LINK_RD01, (void)0);
+        next_pp_state(PP_LINK_RD01, PP_LINK_VRD, (void)0);
+        next_pp_state(PP_LINK_RD, PP_LINK_VRD, (void)0);
         break;
     case 0x03:
         next_pp_state(PP_IDLE, PP_RD00, (void)0);
@@ -182,7 +192,8 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_RD03, PP_WT03, (void)0);
 
         next_pp_state(PP_BRANCH2, PP_BOOT_WT, (void)0);
-        next_pp_state(PP_BOOT_RD, PP_WT00, (void)0);
+        next_pp_state(PP_BOOT_RD, PP_BOOT_WT, (void)0);
+        next_pp_state(PP_BOOT_WT, PP_WT00, (void)0);
 
         next_pp_state(PP_POKE_RD13, PP_POKE_WTAD1, (void)0);
         next_pp_state(PP_POKE_RD14, PP_POKE_WTAD2, (void)0);
@@ -268,7 +279,7 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
             pdebug("PEEK(%x) => %x\n", s->pp_address, s->pp_value);
         }
         if (oldppstate == PP_WT03 && s->pp_state == PP_BRANCH2) {
-            pdebug("TAG(%x)\n", s->pp_current_tag);
+            pdebug("TAG(%08x)\n", s->pp_current_tag);
         }
         break;
     case 0x07:
