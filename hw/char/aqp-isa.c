@@ -87,14 +87,18 @@ struct AQPLink {
     uint32_t length;
     const char *values;
 };
+#define AQPLINKVALUE(tag_, value_) { .tag=tag_, .length=(sizeof value_)-1, .values=value_ }
 
 #define LASTTAG 0xffffffff
 
-
 struct AQPLink AQPLinkValues[] = {
-{ .tag=0xd3, .length=5, .values="\x01\000\000\000\x01" },
-{ .tag=0xdf, .length=9, .values="\x05\000\000\000ABCDE" },  // IFS66vs Optical Bench Firmware
-{ .tag=LASTTAG, .length=0, .values="" }};
+AQPLINKVALUE(0xd3, "\x01\000\000\000\x01"),
+AQPLINKVALUE(0xdc, "\001\000\000\000"),
+AQPLINKVALUE(0xdf, "\x05\000\000\000ABCDE"), // IFS66vs Optical Bench Firmware
+AQPLINKVALUE(0xe1, "\001\000\000\000\001\000\000\000\001"),
+AQPLINKVALUE(0x354b4843, "\x01\000\000\000\x01"), // the "tag" uses more than 4 bytes
+AQPLINKVALUE(LASTTAG, "") };
+
 
 typedef struct AQPState {
     PortioList portio_list;
@@ -195,6 +199,8 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_BRANCH2, PP_LINK_RD01, (void)0);
         next_pp_state(PP_LINK_RD01, PP_LINK_VRD, (void)0);
         next_pp_state(PP_LINK_RD, PP_LINK_VRD, (void)0);
+
+        next_pp_state(PP_BOOT_RD, PP_LINK_RD01, (void)0);
         break;
     case 0x03:
         next_pp_state(PP_IDLE, PP_RD00, (void)0);
