@@ -207,6 +207,8 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_PEEK_RD13, PP_PEEK_WTAD1, (void)0);
         next_pp_state(PP_PEEK_RD14, PP_PEEK_WTAD2, (void)0);
         next_pp_state(PP_PEEK_RD15, PP_PEEK_WTAD3, (void)0);
+
+        next_pp_state(PP_LINK_RD, PP_RD00, (void)0);
         break;
     case 0x07:
         ret = s->byte07;
