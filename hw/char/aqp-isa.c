@@ -82,6 +82,20 @@ enum aqp_poke_state {
 #define PP_MEMORY_BASE 0x80000000
 #define PP_MEMORY_SIZE 0x00200000
 
+struct AQPLink {
+    uint32_t tag;
+    uint32_t length;
+    const char *values;
+};
+
+#define LASTTAG 0xffffffff
+
+
+struct AQPLink AQPLinkValues[] = {
+{ .tag=0xd3, .length=5, .values="\x01\000\000\000\x01" },
+{ .tag=0xdf, .length=9, .values="\x05\000\000\000ABCDE" },  // IFS66vs Optical Bench Firmware
+{ .tag=LASTTAG, .length=0, .values="" }};
+
 typedef struct AQPState {
     PortioList portio_list;
     uint32_t iobase;
@@ -89,6 +103,8 @@ typedef struct AQPState {
     uint32_t pp_address;
     uint32_t pp_value;
     int32_t pp_current_tag;
+    struct AQPLink *pp_current_link;
+    int32_t pp_current_link_pos;
     uint32_t seg8_memory[PP_MEMORY_SIZE / sizeof(uint32_t)];
     uint8_t byte07;
     uint8_t byte10;
@@ -131,6 +147,8 @@ static void aqp_reset(void *opaque)
     AQPState *s = opaque;
     s->pp_state = PP_IDLE;
     s->pp_current_tag = -1;
+    s->pp_current_link = NULL;
+    s->pp_current_link_pos = 0;
 }
 
 
@@ -156,6 +174,17 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
         next_pp_state(PP_PEEK_RDV3, PP_IDLE,      ret = 0xff & (s->pp_value >> 24));
 
         next_pp_state(PP_LINK_VRD, PP_LINK_RD, (void)0);
+        if (oldppstate == PP_LINK_VRD && s->pp_state == PP_LINK_RD) {
+            if (s->pp_current_link) {
+                if (s->pp_current_link_pos < s->pp_current_link->length) {
+                    ret = 0xff & s->pp_current_link->values[s->pp_current_link_pos];
+                    s->pp_current_link_pos++;
+                } else {
+                    pdebug("READING past values for tag %x\n", s->pp_current_link->tag);
+                    ret = 0x5a;
+                }
+            }
+        }
         break;
     case 0x02:
         next_pp_state(PP_PEEK_RD21, PP_PEEK_RDV0, (void)0);
@@ -237,6 +266,19 @@ static uint32_t aqp_ioport_read_hw(void *opaque, uint32_t address)
 }
 
 
+static struct AQPLink *aqp_find_current_link(uint32_t tag)
+{
+    struct AQPLink *ret = AQPLinkValues;
+    while (ret->tag != LASTTAG) {
+        if (ret->tag == tag) {
+            return ret;
+        }
+        ret++;
+    }
+    return NULL;
+}
+
+
 static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
 {
     AQPState *s = opaque;
@@ -281,6 +323,9 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
             pdebug("PEEK(%x) => %x\n", s->pp_address, s->pp_value);
         }
         if (oldppstate == PP_WT03 && s->pp_state == PP_BRANCH2) {
+            s->pp_current_link = aqp_find_current_link(s->pp_current_tag);
+            pdebug("aqp_find_current_link %x returned %x\n", s->pp_current_tag, (s->pp_current_link)?(s->pp_current_link->tag):(0));
+            s->pp_current_link_pos = 0;
             pdebug("TAG(%08x)\n", s->pp_current_tag);
         }
         break;
@@ -298,6 +343,7 @@ static void aqp_ioport_write_hw(void *opaque, uint32_t address, uint32_t value)
         break;
     default:
         pdebug("UNHANDLED PORT %02x\n", port);
+        assert(0);
         break;
     }
 #ifdef DEBUG_AQP
